@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "yandex-tracker": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${workspaceFolder}",
+        "python",
+        "-m",
+        "yandex_tracker_mcp"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "TRACKER_MCP_SCHEMA": "2"
+      }
+    }
+  }
+}
