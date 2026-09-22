@@ -232,7 +232,7 @@ class FakeTrackerApi:
         if transition is None:
             return httpx.Response(404, json={'error': 'not found'})
         issue['status'] = dict(transition['to'])
-        return httpx.Response(200, json=issue)
+        return httpx.Response(200, json=self.transitions.get(key, []))
 
     def _links_response(self, path: str) -> httpx.Response:
         key = path.split('/issues/')[1].split('/')[0]

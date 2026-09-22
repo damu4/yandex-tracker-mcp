@@ -141,8 +141,9 @@ class TrackerClient:
         body: dict[str, Any] = {}
         if change.resolution is not None:
             body['resolution'] = change.resolution
-        raw = self._request_json('POST', f'issues/{key}/transitions/{transition_id}/_execute', json=body)
-        return Issue.from_tracker(raw)
+        self._request_json('POST', f'issues/{key}/transitions/{transition_id}/_execute', json=body)
+        # _execute отвечает списком доступных переходов, а не задачей.
+        return self.get_issue(key.value, with_comments=False)
 
     def create_link(self, issue: str, *, target: str, relationship: str = IssueLink.HAS_EPIC) -> IssueLink:
         key = IssueKey.parse(issue)

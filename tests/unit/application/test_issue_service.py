@@ -147,7 +147,10 @@ class TestIssueService:
 
         # assert
         assert result['status'] == 'В работе'
-        assert api.requests[-1].url.path == '/v3/issues/LGS-10/transitions/start_progress/_execute'
+        assert api.requests[-2].method == 'POST'
+        assert api.requests[-2].url.path == '/v3/issues/LGS-10/transitions/start_progress/_execute'
+        assert api.requests[-1].method == 'GET'
+        assert api.requests[-1].url.path == '/v3/issues/LGS-10'
 
     def test_update_issue_status__already_current__does_not_execute(self) -> None:
         # arrange

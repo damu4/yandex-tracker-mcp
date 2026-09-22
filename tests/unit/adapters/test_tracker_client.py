@@ -225,10 +225,12 @@ class TestTrackerClient:
 
         # assert
         assert result['status'] == 'Закрыт'
-        request = api.requests[0]
-        assert request.method == 'POST'
-        assert request.url.path == '/v3/issues/LGS-1/transitions/close/_execute'
-        assert json.loads(request.content) == {'resolution': 'fixed'}
+        execute, refetch = api.requests
+        assert execute.method == 'POST'
+        assert execute.url.path == '/v3/issues/LGS-1/transitions/close/_execute'
+        assert json.loads(execute.content) == {'resolution': 'fixed'}
+        assert refetch.method == 'GET'
+        assert refetch.url.path == '/v3/issues/LGS-1'
 
     def test_get_issue__unauthorized__raises_tracker_error(self) -> None:
         # arrange
