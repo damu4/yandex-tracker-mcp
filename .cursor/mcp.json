@@ -11,8 +11,7 @@
         "yandex_tracker_mcp"
       ],
       "env": {
-        "PYTHONUNBUFFERED": "1",
-        "TRACKER_MCP_SCHEMA": "2"
+        "PYTHONUNBUFFERED": "1"
       }
     }
   }
