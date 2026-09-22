@@ -51,9 +51,17 @@ uv sync --group dev
 cp .env.example .env
 ```
 
-Заполните `YANDEX_TRACKER_TOKEN` и `YANDEX_TRACKER_ORG_ID` (те же имена, что в репозитории staff). Очередь по умолчанию задаётся `YANDEX_TRACKER_QUEUE` (пример: `KRA`).
+Заполните `YANDEX_TRACKER_TOKEN` и `YANDEX_TRACKER_ORG_ID`. Очередь по умолчанию задаётся `YANDEX_TRACKER_QUEUE` (в `.env.example` — пример имени очереди).
 
-Если Tracker отвечает `403 Organization is not available`, обновите токен в `.env` и проверьте org ID в Tracker: **Администрирование → Организации → ID**. IAM-токены (`t1.…`) быстро протухают.
+Токен — IAM-токен Yandex Cloud. Установите [Yandex Cloud CLI](https://yandex.cloud/ru/docs/cli/quickstart#install), пройдите `yc init` из той же инструкции и выполните:
+
+```bash
+yc iam create-token
+```
+
+Вставьте вывод в `YANDEX_TRACKER_TOKEN`. Org ID возьмите в Tracker: **Администрирование → Организации → ID**.
+
+IAM-токены (`t1.…`) быстро протухают. Если Tracker отвечает `403 Organization is not available`, обновите токен той же командой и проверьте, что org ID относится к той же организации.
 
 Создайте окружение Python 3.13 через uv и установите пакет:
 
@@ -61,13 +69,23 @@ cp .env.example .env
 uv sync --group dev
 ```
 
-Проверки:
+Проверки кода:
 
 ```bash
 uv run pytest
 uv run ruff check src tests
 uv run ruff format --check src tests
 ```
+
+Проверка, что сервер вообще стартует на этой машине (без Cursor и без Claude):
+
+```bash
+uv run python -c "from yandex_tracker_mcp.server import mcp; print(', '.join(sorted(t.name for t in mcp._tool_manager.list_tools())))"
+```
+
+Должен напечататься список инструментов, включая `get_issue` и `create_comment`. Если команда падает на импорте, на этой машине клиент MCP тоже не запустится. `pytest` сеть Tracker не вызывает: зелёные тесты значат, что пакет собирается, а не что токен валиден.
+
+Живой доступ к Tracker проверяется уже из клиента: после подключения MCP прочитайте любую задачу, к которой есть доступ у токена.
 
 ## Что не класть в git
 
@@ -202,3 +220,44 @@ uv run ruff format --check src tests
 ## Cursor
 
 Проектный конфиг лежит в `.cursor/mcp.json` и едет вместе с репозиторием. Глобальный вариант для всех чатов — в разделе [Перенос на другой компьютер](#перенос-на-другой-компьютер).
+
+## Claude
+
+Claude Code и Claude Desktop — разные приложения и разные файлы. Конфиг Cursor они не читают и `${workspaceFolder}` не подставляют. В `command` и `--directory` нужны абсолютные пути. Секреты в конфиг не копируйте: сервер читает `.env` в каталоге репозитория.
+
+Инструменты вида `mcp__yandex-tracker__*` приходят из Claude Code. Их место — `~/.claude.json`, секция `mcpServers`. Файл `~/.config/Claude/claude_desktop_config.json` — настройки окна Desktop; без секции `mcpServers` это нормально, если Desktop не используется.
+
+```bash
+claude mcp add --scope user yandex-tracker -- "$(which uv)" run --directory "$(pwd)" python -m yandex_tracker_mcp
+```
+
+Команду запускайте из корня клона. Она дописывает user-scope в `~/.claude.json`. Затем перезапустите `claude`. Проверка: `claude mcp list`.
+
+Claude Desktop подключайте отдельно, только если нужно само приложение. Туда добавляется `mcpServers` в уже существующий JSON:
+
+- Linux: `~/.config/Claude/claude_desktop_config.json`
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "yandex-tracker": {
+      "command": "/home/user/.local/bin/uv",
+      "args": [
+        "run",
+        "--directory",
+        "/home/user/yandex-tracker-mcp",
+        "python",
+        "-m",
+        "yandex_tracker_mcp"
+      ],
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
+```
+
+Подставьте свои пути. После правки полностью закройте Desktop и откройте снова.
