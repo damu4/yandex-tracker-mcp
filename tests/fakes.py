@@ -13,6 +13,7 @@ class FakeTrackerApi:
         self.issues: dict[str, dict[str, Any]] = {}
         self.comments: dict[str, list[dict[str, Any]]] = {}
         self.links: dict[str, list[dict[str, Any]]] = {}
+        self.transitions: dict[str, list[dict[str, Any]]] = {}
         self._created = 0
         self.status_overrides: dict[str, int] = {}
         self.error_payloads: dict[str, dict[str, Any]] = {}
@@ -84,6 +85,23 @@ class FakeTrackerApi:
         items.append(payload)
         return payload
 
+    def add_transition(
+        self,
+        key: str,
+        *,
+        transition_id: str,
+        display: str,
+        status: str,
+        status_key: str | None = None,
+    ) -> None:
+        self.transitions.setdefault(key, []).append(
+            {
+                'id': transition_id,
+                'display': display,
+                'to': {'key': status_key or status.casefold(), 'display': status},
+            },
+        )
+
     def add_link(
         self,
         issue_key: str,
@@ -123,6 +141,10 @@ class FakeTrackerApi:
         if override:
             return httpx.Response(override, json=self.error_payloads.get(path, {'error': 'failed'}))
 
+        if request.method == 'GET' and path.endswith('/transitions'):
+            return self._transitions_response(path)
+        if request.method == 'POST' and path.endswith('/_execute') and '/transitions/' in path:
+            return self._execute_transition_response(path)
         if request.method == 'GET' and path.endswith('/comments'):
             return self._comments_response(request, path)
         if request.method == 'POST' and path.endswith('/comments'):
@@ -188,6 +210,28 @@ class FakeTrackerApi:
             issue['type'] = {'key': type_name.casefold(), 'name': type_name, 'display': type_name}
         if 'storyPoints' in body:
             issue['storyPoints'] = body['storyPoints']
+        return httpx.Response(200, json=issue)
+
+    def _transitions_response(self, path: str) -> httpx.Response:
+        key = path.split('/issues/')[1].split('/')[0]
+        if key not in self.issues:
+            return httpx.Response(404, json={'error': 'not found'})
+        return httpx.Response(200, json=self.transitions.get(key, []))
+
+    def _execute_transition_response(self, path: str) -> httpx.Response:
+        parts = path.split('/issues/')[1].split('/')
+        key = parts[0]
+        transition_id = parts[2] if len(parts) > 2 else ''
+        issue = self.issues.get(key)
+        if issue is None:
+            return httpx.Response(404, json={'error': 'not found'})
+        transition = next(
+            (item for item in self.transitions.get(key, []) if item.get('id') == transition_id),
+            None,
+        )
+        if transition is None:
+            return httpx.Response(404, json={'error': 'not found'})
+        issue['status'] = dict(transition['to'])
         return httpx.Response(200, json=issue)
 
     def _links_response(self, path: str) -> httpx.Response:

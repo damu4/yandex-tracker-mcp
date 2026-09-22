@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from yandex_tracker_mcp.adapters.tracker import TrackerClient
-from yandex_tracker_mcp.domain.issue import CommentDraft, IssueDraft
+from yandex_tracker_mcp.domain.exceptions import TrackerError
+from yandex_tracker_mcp.domain.issue import CommentDraft, IssueDraft, IssueStatusChange
 
 
 class IssueService:
@@ -51,6 +52,25 @@ class IssueService:
             set_story_points=set_story_points,
         )
         return self._client.update_issue(issue, draft).to_payload()
+
+    def update_issue_status(
+        self,
+        issue: str,
+        status: str,
+        resolution: str | None = None,
+    ) -> dict[str, Any]:
+        change = IssueStatusChange.parse(status, resolution)
+        current = self._client.get_issue(issue, with_comments=False)
+        if change.matches_current(current):
+            return current.to_payload()
+        transitions = self._client.list_transitions(issue)
+        chosen = change.match(transitions)
+        if chosen is None:
+            raise TrackerError(
+                change.unavailable_message(current, transitions),
+                code='UNAVAILABLE_STATUS',
+            )
+        return self._client.execute_transition(issue, change, chosen.id).to_payload()
 
     def get_epic_issues(self, issue: str) -> dict[str, Any]:
         key, issues = self._client.list_epic_issues(issue)

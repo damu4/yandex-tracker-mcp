@@ -13,6 +13,8 @@ from yandex_tracker_mcp.domain.issue import (
     IssueKey,
     IssueLink,
     IssueListItem,
+    IssueStatusChange,
+    IssueTransition,
     ProjectId,
 )
 
@@ -126,6 +128,20 @@ class TrackerClient:
     def update_issue(self, issue: str, draft: IssueDraft) -> Issue:
         key = IssueKey.parse(issue)
         raw = self._request_json('PATCH', f'issues/{key}', json=draft.to_tracker_payload())
+        return Issue.from_tracker(raw)
+
+    def list_transitions(self, issue: str) -> tuple[IssueTransition, ...]:
+        key = IssueKey.parse(issue)
+        payload = self._request_json('GET', f'issues/{key}/transitions')
+        items = payload if isinstance(payload, list) else payload.get('items', [])
+        return tuple(IssueTransition.from_tracker(item) for item in items)
+
+    def execute_transition(self, issue: str, change: IssueStatusChange, transition_id: str) -> Issue:
+        key = IssueKey.parse(issue)
+        body: dict[str, Any] = {}
+        if change.resolution is not None:
+            body['resolution'] = change.resolution
+        raw = self._request_json('POST', f'issues/{key}/transitions/{transition_id}/_execute', json=body)
         return Issue.from_tracker(raw)
 
     def create_link(self, issue: str, *, target: str, relationship: str = IssueLink.HAS_EPIC) -> IssueLink:

@@ -8,7 +8,9 @@ from yandex_tracker_mcp.domain.issue import (
     IssueLink,
     IssueListItem,
     IssueRef,
+    IssueStatusChange,
     IssueSummary,
+    IssueTransition,
     IssueType,
 )
 
@@ -22,7 +24,9 @@ __all__ = [
     'IssueLink',
     'IssueListItem',
     'IssueRef',
+    'IssueStatusChange',
     'IssueSummary',
+    'IssueTransition',
     'IssueType',
     'TrackerError',
 ]

@@ -318,9 +318,12 @@ class Issue:
     parent: IssueRef | None = None
     epic: IssueRef | None = None
     story_points: int | float | None = None
+    status: str = ''
+    status_key: str = ''
 
     @classmethod
     def from_tracker(cls, raw: dict[str, Any], comments: list[dict[str, Any]] | None = None) -> Issue:
+        status = raw.get('status') if isinstance(raw.get('status'), dict) else {}
         return cls(
             key=str(raw.get('key') or ''),
             summary=str(raw.get('summary') or ''),
@@ -330,6 +333,8 @@ class Issue:
             parent=IssueRef.from_tracker(raw.get('parent')),
             epic=IssueRef.from_tracker(raw.get('epic')),
             story_points=parse_story_points(raw.get('storyPoints')),
+            status=TrackerRef.name(raw.get('status')),
+            status_key=str(status.get('key') or ''),
         )
 
     def to_payload(self) -> dict[str, Any]:
@@ -338,11 +343,76 @@ class Issue:
             'summary': self.summary,
             'description': self.description,
             'type': self.issue_type.name,
+            'status': self.status,
             'storyPoints': self.story_points,
             'parent': self.parent.to_payload() if self.parent else None,
             'epic': self.epic.to_payload() if self.epic else None,
             'comments': [comment.to_payload() for comment in self.comments],
         }
+
+
+@dataclass(frozen=True)
+class IssueTransition:
+    id: str
+    display: str
+    status: str
+    status_key: str
+
+    @classmethod
+    def from_tracker(cls, raw: dict[str, Any]) -> IssueTransition:
+        target = raw.get('to') if isinstance(raw.get('to'), dict) else {}
+        return cls(
+            id=str(raw.get('id') or ''),
+            display=str(raw.get('display') or ''),
+            status=TrackerRef.name(target),
+            status_key=str(target.get('key') or ''),
+        )
+
+    def matches(self, requested: str) -> bool:
+        needle = requested.strip().casefold()
+        if not needle:
+            return False
+        candidates = {
+            self.id.casefold(),
+            self.display.casefold(),
+            self.status.casefold(),
+            self.status_key.casefold(),
+        }
+        return needle in candidates
+
+    @property
+    def label(self) -> str:
+        if self.status and self.id:
+            return f'{self.status} ({self.id})'
+        return self.status or self.display or self.id
+
+
+@dataclass(frozen=True)
+class IssueStatusChange:
+    status: str
+    resolution: str | None = None
+
+    @classmethod
+    def parse(cls, status: str, resolution: str | None = None) -> IssueStatusChange:
+        stripped = status.strip()
+        if not stripped:
+            raise TrackerError('Issue status must not be empty.', code='INVALID_ISSUE_STATUS')
+        parsed_resolution = (resolution or '').strip()
+        if resolution is not None and not parsed_resolution:
+            raise TrackerError('Resolution must not be empty.', code='INVALID_RESOLUTION')
+        return cls(stripped, parsed_resolution or None)
+
+    def matches_current(self, issue: Issue) -> bool:
+        needle = self.status.casefold()
+        return needle in {issue.status.casefold(), issue.status_key.casefold()} - {''}
+
+    def match(self, transitions: tuple[IssueTransition, ...]) -> IssueTransition | None:
+        return next((item for item in transitions if item.matches(self.status)), None)
+
+    def unavailable_message(self, issue: Issue, transitions: tuple[IssueTransition, ...]) -> str:
+        available = ', '.join(item.label for item in transitions) or 'none'
+        current = issue.status or 'unknown'
+        return f'Status {self.status!r} is not available from {current}. Available: {available}.'
 
 
 @dataclass(frozen=True)

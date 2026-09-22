@@ -9,7 +9,9 @@ from yandex_tracker_mcp.domain.issue import (
     IssueDraft,
     IssueKey,
     IssueLink,
+    IssueStatusChange,
     IssueSummary,
+    IssueTransition,
     IssueType,
     ProjectId,
 )
@@ -414,6 +416,7 @@ class TestIssue:
             'summary': 'Fix login',
             'description': 'Details here',
             'type': {'display': 'Backend', 'key': 'backend', 'name': 'Backend'},
+            'status': {'id': '3', 'key': 'closed', 'display': 'Закрыт'},
             'assignee': {'display': 'Ivan', 'login': 'ivan'},
             'createdBy': {'display': 'Petr', 'login': 'petr'},
             'updatedBy': {'display': 'Olga', 'login': 'olga'},
@@ -443,6 +446,7 @@ class TestIssue:
             'summary': 'Fix login',
             'description': 'Details here',
             'type': 'Backend',
+            'status': 'Закрыт',
             'storyPoints': 8,
             'parent': {'key': 'LGS-1', 'summary': 'Parent task'},
             'epic': {'key': 'DISC-869', 'summary': 'Load dictionaries'},
@@ -461,6 +465,64 @@ class TestIssue:
         assert 'Olga' not in dumped
         assert 'assignee' not in dumped
         assert 'createdBy' not in dumped
+        assert 'closed' not in dumped
+
+
+class TestIssueStatusChange:
+    def test_parse__strips_status_and_resolution(self) -> None:
+        # act
+        change = IssueStatusChange.parse('  В работе  ', '  fixed  ')
+
+        # assert
+        assert change.status == 'В работе'
+        assert change.resolution == 'fixed'
+
+    def test_parse__empty_status__raises_tracker_error(self) -> None:
+        # act / assert
+        with pytest.raises(TrackerError, match='Issue status must not be empty'):
+            IssueStatusChange.parse('  ')
+
+    def test_parse__empty_resolution__raises_tracker_error(self) -> None:
+        # act / assert
+        with pytest.raises(TrackerError, match='Resolution must not be empty'):
+            IssueStatusChange.parse('Закрыт', '  ')
+
+    def test_match__accepts_status_name_key_and_transition_id(self) -> None:
+        # arrange
+        transition = IssueTransition.from_tracker(
+            {
+                'id': 'start_progress',
+                'display': 'В работу',
+                'to': {'key': 'inProgress', 'display': 'В работе'},
+            },
+        )
+        change = IssueStatusChange.parse('inProgress')
+
+        # act
+        matched = change.match((transition,))
+
+        # assert
+        assert matched == transition
+        assert transition.matches('В работе')
+        assert transition.matches('start_progress')
+        assert transition.label == 'В работе (start_progress)'
+
+    def test_matches_current__same_status_key(self) -> None:
+        # arrange
+        issue = Issue(
+            key='KRA-417',
+            summary='Title',
+            description='',
+            issue_type=IssueType('Backend'),
+            status='В работе',
+            status_key='inProgress',
+        )
+
+        # act
+        same = IssueStatusChange.parse('inProgress').matches_current(issue)
+
+        # assert
+        assert same is True
 
 
 class TestCommentDraft:

@@ -8,7 +8,7 @@ import pytest
 from tests.fakes import FakeTrackerApi
 from yandex_tracker_mcp.adapters.tracker import TrackerApiError, TrackerAuth, TrackerClient
 from yandex_tracker_mcp.domain.exceptions import TrackerError
-from yandex_tracker_mcp.domain.issue import CommentDraft, IssueDraft
+from yandex_tracker_mcp.domain.issue import CommentDraft, IssueDraft, IssueStatusChange
 
 
 class TestTrackerAuth:
@@ -56,6 +56,7 @@ class TestTrackerClient:
             'summary': 'Title',
             'description': 'Body',
             'type': 'Backend',
+            'status': 'Open',
             'storyPoints': None,
             'parent': None,
             'epic': None,
@@ -210,6 +211,24 @@ class TestTrackerClient:
         # assert
         assert result['storyPoints'] == 5
         assert json.loads(api.requests[-1].content)['storyPoints'] == 5
+
+    def test_execute_transition__posts_resolution_and_returns_new_status(self) -> None:
+        # arrange
+        api = FakeTrackerApi()
+        api.add_issue('LGS-1', summary='Title', description='Body', issue_type='Backend', status='Open')
+        api.add_transition('LGS-1', transition_id='close', display='Закрыть', status='Закрыт', status_key='closed')
+        change = IssueStatusChange.parse('Закрыт', 'fixed')
+
+        # act
+        with TrackerClient('token', 'org', transport=api.transport()) as client:
+            result = client.execute_transition('LGS-1', change, 'close').to_payload()
+
+        # assert
+        assert result['status'] == 'Закрыт'
+        request = api.requests[0]
+        assert request.method == 'POST'
+        assert request.url.path == '/v3/issues/LGS-1/transitions/close/_execute'
+        assert json.loads(request.content) == {'resolution': 'fixed'}
 
     def test_get_issue__unauthorized__raises_tracker_error(self) -> None:
         # arrange

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "yandex-tracker-mcp"
 version = "0.2.0"
-description = "MCP server that reads, creates, and updates Yandex Tracker issues and comments without PII."
+description = "MCP server that reads, creates, and updates Yandex Tracker issues, status, and comments without PII."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

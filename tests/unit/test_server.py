@@ -11,6 +11,7 @@ class TestMcpTools:
             'get_issue',
             'create_issue',
             'update_issue',
+            'update_issue_status',
             'get_epic_issues',
             'get_project_epics',
             'get_issue_links',

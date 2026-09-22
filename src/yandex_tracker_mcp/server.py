@@ -58,6 +58,15 @@ class TrackerMcp:
                 set_story_points=set_story_points,
             )
 
+    def update_issue_status(
+        self,
+        issue: str,
+        status: str,
+        resolution: str | None = None,
+    ) -> dict[str, Any]:
+        with self._service() as service:
+            return service.update_issue_status(issue, status, resolution)
+
     def get_epic_issues(self, issue: str) -> dict[str, Any]:
         with self._service() as service:
             return service.get_epic_issues(issue)
@@ -109,7 +118,7 @@ _tools = TrackerMcp()
 def get_issue(issue: str) -> dict[str, Any]:
     """Read a Yandex Tracker issue by key or URL.
 
-    Returns only the issue key, type, story points, title, description, parent/epic refs, and comments
+    Returns only the issue key, type, status, story points, title, description, parent/epic refs, and comments
     (id, text, createdAt, updatedAt). Does not return assignee, authors, or other personal data.
 
     Args:
@@ -183,6 +192,26 @@ def update_issue(
         story_points=story_points,
         set_story_points=story_points is not None,
     )
+
+
+@mcp.tool()
+def update_issue_status(
+    issue: str,
+    status: str,
+    resolution: str | None = None,
+) -> dict[str, Any]:
+    """Move a Yandex Tracker issue to another workflow status.
+
+    Pass the target status name (В работе), status key (inProgress), or transition id.
+    If the issue is already in that status, it is returned unchanged.
+    Closing transitions often require a resolution key such as fixed.
+
+    Args:
+        issue: Issue key (LGS-584) or Tracker URL.
+        status: Target status display, status key, or transition id.
+        resolution: Resolution key, when the transition requires one.
+    """
+    return _tools.update_issue_status(issue, status, resolution)
 
 
 @mcp.tool()

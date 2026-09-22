@@ -129,6 +129,53 @@ class TestIssueService:
         assert result['storyPoints'] == 8
         assert result['summary'] == 'Title'
 
+    def test_update_issue_status__executes_matching_transition(self) -> None:
+        # arrange
+        api = FakeTrackerApi()
+        api.add_issue('LGS-10', summary='Title', description='Body', issue_type='Backend', status='Open')
+        api.add_transition(
+            'LGS-10',
+            transition_id='start_progress',
+            display='В работу',
+            status='В работе',
+            status_key='inProgress',
+        )
+
+        # act
+        with TrackerClient('token', 'org', transport=api.transport()) as client:
+            result = IssueService(client, default_queue='LGS').update_issue_status('LGS-10', 'inProgress')
+
+        # assert
+        assert result['status'] == 'В работе'
+        assert api.requests[-1].url.path == '/v3/issues/LGS-10/transitions/start_progress/_execute'
+
+    def test_update_issue_status__already_current__does_not_execute(self) -> None:
+        # arrange
+        api = FakeTrackerApi()
+        api.add_issue('LGS-10', summary='Title', description='Body', issue_type='Backend', status='Open')
+        api.add_transition('LGS-10', transition_id='close', display='Закрыть', status='Закрыт', status_key='closed')
+
+        # act
+        with TrackerClient('token', 'org', transport=api.transport()) as client:
+            result = IssueService(client, default_queue='LGS').update_issue_status('LGS-10', 'open')
+
+        # assert
+        assert result['status'] == 'Open'
+        assert [request.method for request in api.requests] == ['GET']
+
+    def test_update_issue_status__unavailable__raises_tracker_error(self) -> None:
+        # arrange
+        api = FakeTrackerApi()
+        api.add_issue('LGS-10', summary='Title', description='Body', issue_type='Backend', status='Open')
+        api.add_transition('LGS-10', transition_id='close', display='Закрыть', status='Закрыт', status_key='closed')
+
+        # act / assert
+        with (
+            TrackerClient('token', 'org', transport=api.transport()) as client,
+            pytest.raises(TrackerError, match=r'Available: Закрыт \(close\)'),
+        ):
+            IssueService(client, default_queue='LGS').update_issue_status('LGS-10', 'В работе')
+
     def test_update_issue__change_type_to_backend__rewrites_title_and_type(self) -> None:
         # arrange
         api = FakeTrackerApi()
